@@ -1,0 +1,28 @@
+steps:
+  # Step 1: Install dependencies
+  - name: 'node:20'
+    entrypoint: 'npm'
+    args: ['ci']
+
+  # Step 2: Generate Prisma Client
+  - name: 'node:20'
+    entrypoint: 'npx'
+    args: ['prisma', 'generate']
+
+  # Step 3: Run database migrations automatically on deploy
+  - name: 'node:20'
+    entrypoint: 'npx'
+    args: ['prisma', 'migrate', 'deploy']
+    env:
+      - 'DATABASE_URL=$_DATABASE_URL'
+
+  # Step 4: Build and deploy to Cloud Run using Google Buildpacks
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args:
+      - 'gcloud'
+      - 'run'
+      - 'deploy'
+      - 'hackathon-service' # Replace with your Cloud Run service name
+      - '--source=.'
+      - '--region=europe-west1' # Match your deployment region
+      - '--allow-unauthenticated'
