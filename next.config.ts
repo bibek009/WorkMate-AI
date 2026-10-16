@@ -2,6 +2,8 @@ import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
+
   serverExternalPackages: [
     "@ffmpeg-installer/ffmpeg",
     "fluent-ffmpeg",
@@ -9,6 +11,7 @@ const nextConfig: NextConfig = {
     "tesseract.js",
     "pdf-parse",
   ],
+
   turbopack: {
     root: path.resolve(__dirname),
     rules: {

@@ -1,26 +1,64 @@
+
 options:
   logging: CLOUD_LOGGING_ONLY
 
+timeout: 1200s
+
 steps:
-  # Step 1: Install dependencies
-  - name: 'node:22'
-    entrypoint: 'npm'
-    args: ['ci']
-
-  # Step 2: Generate Prisma Client
-  - name: 'node:22'
-    entrypoint: 'npx'
-    args: ['prisma', 'generate']
-
-  # Step 3: Build and deploy to Cloud Run with Node 22 and increased build memory
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  # Step 1: Pull the previous image for Docker layer caching.
+  # The first build can proceed even when no previous image exists.
+  - name: gcr.io/cloud-builders/docker
+    id: pull-cache
+    entrypoint: bash
     args:
-      - 'gcloud'
-      - 'run'
-      - 'deploy'
-      - 'hackathon-service'
-      - '--source=.'
-      - '--region=asia-southeast1'
-      - '--allow-unauthenticated'
-      - '--set-env-vars=NODE_VERSION=22'
-      - '--memory=2Gi'
+      - -c
+      - |
+        docker pull asia-southeast1-docker.pkg.dev/hackathon-2026-511608/cloud-run-images/hackathon-service:latest || true
+
+  # Step 2: Build the container once, using the previous image as cache.
+  - name: gcr.io/cloud-builders/docker
+    id: build-image
+    args:
+      - build
+      - --cache-from
+      - asia-southeast1-docker.pkg.dev/hackathon-2026-511608/cloud-run-images/hackathon-service:latest
+      - -t
+      - asia-southeast1-docker.pkg.dev/hackathon-2026-511608/cloud-run-images/hackathon-service:$BUILD_ID
+      - -t
+      - asia-southeast1-docker.pkg.dev/hackathon-2026-511608/cloud-run-images/hackathon-service:latest
+      - -f
+      - Dockerfile
+      - .
+
+  # Step 3: Push the uniquely tagged image.
+  - name: gcr.io/cloud-builders/docker
+    id: push-version
+    args:
+      - push
+      - asia-southeast1-docker.pkg.dev/hackathon-2026-511608/cloud-run-images/hackathon-service:$BUILD_ID
+
+  # Step 4: Update the latest tag for use as the next build's cache.
+  - name: gcr.io/cloud-builders/docker
+    id: push-latest
+    args:
+      - push
+      - asia-southeast1-docker.pkg.dev/hackathon-2026-511608/cloud-run-images/hackathon-service:latest
+
+  # Step 5: Deploy the already-built image to Cloud Run.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-cloud-run
+    args:
+      - gcloud
+      - run
+      - deploy
+      - hackathon-service
+      - --image=asia-southeast1-docker.pkg.dev/hackathon-2026-511608/cloud-run-images/hackathon-service:$BUILD_ID
+      - --project=hackathon-2026-511608
+      - --region=asia-southeast1
+      - --platform=managed
+      - --allow-unauthenticated
+      - --memory=2Gi
+
+images:
+  - asia-southeast1-docker.pkg.dev/hackathon-2026-511608/cloud-run-images/hackathon-service:$BUILD_ID
+  - asia-southeast1-docker.pkg.dev/hackathon-2026-511608/cloud-run-images/hackathon-service:latest
